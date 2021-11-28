@@ -78,7 +78,7 @@ class NetBrain:
         response.raise_for_status()
         return response.json()["gatewayList"]
 
-    def get_device_attributes(self, hostname):
+    def get_device_attrs(self, hostname):
         response = requests.get(
             f"{self.base_url}/CMDB/Devices/Attributes",
             params={"hostname": hostname},
