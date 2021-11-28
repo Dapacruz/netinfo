@@ -1,14 +1,12 @@
+#!/usr/bin/env python3
+
+import argparse
 import json
 import os
 import time
 from netbrain import NetBrain
 
-routing_devices = ["Cisco", "Palo Alto Networks"]
-
-source = "10.129.210.250"  # PAN HA
-# source = "10.32.162.250"  # PAN standalone
-# source = "192.168.40.245"  # Cisco
-destination = "192.168.34.120"
+router_types = ["Cisco", "Palo Alto Networks"]
 
 
 def import_env(path):
@@ -19,22 +17,9 @@ def import_env(path):
         return None
 
 
-def main():
-    t1_start = time.process_time()
-
-    env = import_env("env.json")
-
-    nb = NetBrain(
-        env["netbrain_url"],
-        env["netbrain_user"],
-        env["netbrain_password"],
-        env["tenant_name"],
-        env["domain_name"],
-    )
-
-    device_attrs = ""
-    # Get the active gateway for the source subnet
-    for gw in nb.get_gateway_list(source):
+def get_active_gateway(nb, src_ip):
+    """Get the active gateway for the source subnet"""
+    for gw in nb.get_gateway_list(src_ip):
         gw = json.loads(gw["payload"])
 
         # Skip if no device key
@@ -48,7 +33,7 @@ def main():
             continue
 
         # Skip unknown routing devices
-        if device_attrs["vendor"] not in routing_devices:
+        if device_attrs["vendor"] not in router_types:
             device_attrs = ""
             continue
 
@@ -57,9 +42,46 @@ def main():
             if nb.get_pan_ha_state(device_attrs["name"]) == "passive":
                 continue
 
-        break
+        return device_attrs
 
-    print(device_attrs)
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Trace route from source to destination"
+    )
+    parser.add_argument(
+        "-s", "--source", metavar="", type=str, required=True, help="Source IP address"
+    )
+    parser.add_argument(
+        "-d",
+        "--destination",
+        metavar="",
+        type=str,
+        required=True,
+        help="Destination IP address",
+    )
+
+    return parser.parse_args()
+
+
+def main():
+    t1_start = time.process_time()
+
+    args = parse_args()
+
+    env = import_env("env.json")
+
+    nb = NetBrain(
+        env["netbrain_url"],
+        env["netbrain_user"],
+        env["netbrain_password"],
+        env["tenant_name"],
+        env["domain_name"],
+    )
+
+    device_attrs = get_active_gateway(nb, args.source)
+
+    print(json.dumps(device_attrs, indent=2, sort_keys=True))
 
     t1_stop = time.process_time()
     print(f"\n Took {t1_stop-t1_start :.3f} seconds to complete")
