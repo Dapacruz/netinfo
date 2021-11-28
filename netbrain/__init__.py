@@ -43,6 +43,7 @@ class NetBrain:
             verify=self.verify,
         )
         response.raise_for_status()
+
         return response.json()["tenants"]
 
     def get_domains(self):
@@ -53,6 +54,7 @@ class NetBrain:
             verify=self.verify,
         )
         response.raise_for_status()
+
         return response.json()["domains"]
 
     def set_current_domain(self):
@@ -76,6 +78,7 @@ class NetBrain:
             verify=self.verify,
         )
         response.raise_for_status()
+
         return response.json()["gatewayList"]
 
     def get_device_attrs(self, hostname):
@@ -86,6 +89,7 @@ class NetBrain:
             verify=self.verify,
         )
         response.raise_for_status()
+
         return response.json()["attributes"]
 
     def get_pan_ha_state(self, hostname):
@@ -103,8 +107,10 @@ class NetBrain:
             verify=self.verify,
         )
         response.raise_for_status()
+
         ha_state = re.findall(
             r"State: (active|passive)",
             response.json()["content"],
         )[0]
+
         return ha_state
