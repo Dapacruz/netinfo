@@ -1,9 +1,14 @@
 import json
 import os
+import re
 import time
 from netbrain import NetBrain
 
-source = "10.171.68.10"
+routing_devices = ["Cisco", "Palo Alto Networks"]
+
+# source = "10.129.210.250"  # PAN HA
+source = "10.32.162.250"  # PAN standalone
+# source = "192.168.40.245"  # Cisco
 destination = "192.168.34.120"
 
 
@@ -28,10 +33,35 @@ def main():
         env["domain_name"],
     )
 
-    for gw in nb.get_gateway(source):
+    attributes = ""
+    hostname = ""
+    # Get the active gateway for the source subnet
+    for gw in nb.get_gateway_list(source):
         gw = json.loads(gw["payload"])
-        print(gw["ip"])
-        print(gw["device"])
+
+        # Skip if no device key
+        if hostname := gw.get("device"):
+            # Strip firewall vsys from hostname
+            if re.match(r".*/.*", hostname):
+                hostname = hostname.split("/")[0]
+
+            attributes = nb.get_device_attributes(hostname)
+        else:
+            continue
+
+        # Skip unknown routing devices
+        if attributes["vendor"] not in routing_devices:
+            attributes = ""
+            continue
+
+        # Skip PAN passive HA member
+        if attributes["vendor"] == "Palo Alto Networks" and attributes["isHA"]:
+            if nb.get_pan_ha_state(attributes["name"]) == "passive":
+                continue
+
+        break
+
+    print(attributes)
 
     t1_stop = time.process_time()
     print(f"\n Took {t1_stop-t1_start :.3f} seconds to complete")
