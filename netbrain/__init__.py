@@ -1,3 +1,4 @@
+import re
 import requests
 
 # Disable SSL certificate verification warnings
@@ -67,19 +68,43 @@ class NetBrain:
         )
         response.raise_for_status()
 
-    def get_gateway(self, src_ip):
-        headers = {
-            "Accept": "*/*",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Cache-Control": "no-cache",
-        }
-        headers.update(self.base_headers)
+    def get_gateway_list(self, src_ip):
         response = requests.get(
             f"{self.base_url}/CMDB/Path/Gateways",
             params={"ipOrHost": src_ip},
-            headers=headers,
+            headers=self.base_headers,
             verify=self.verify,
         )
         response.raise_for_status()
         return response.json()["gatewayList"]
+
+    def get_device_attributes(self, hostname):
+        response = requests.get(
+            f"{self.base_url}/CMDB/Devices/Attributes",
+            params={"hostname": hostname},
+            headers=self.base_headers,
+            verify=self.verify,
+        )
+        response.raise_for_status()
+        return response.json()["attributes"]
+
+    def get_pan_ha_state(self, hostname):
+        data_type = 1
+        table_name = "HA State"
+
+        response = requests.get(
+            f"{self.base_url}/CMDB/Devices/DeviceRawData",
+            params={
+                "hostname": hostname,
+                "dataType": data_type,
+                "tableName": table_name,
+            },
+            headers=self.base_headers,
+            verify=self.verify,
+        )
+        response.raise_for_status()
+        ha_state = re.findall(
+            r"State: (active|passive)",
+            response.json()["content"],
+        )[0]
+        return ha_state
