@@ -1,13 +1,12 @@
 import json
 import os
-import re
 import time
 from netbrain import NetBrain
 
 routing_devices = ["Cisco", "Palo Alto Networks"]
 
-# source = "10.129.210.250"  # PAN HA
-source = "10.32.162.250"  # PAN standalone
+source = "10.129.210.250"  # PAN HA
+# source = "10.32.162.250"  # PAN standalone
 # source = "192.168.40.245"  # Cisco
 destination = "192.168.34.120"
 
@@ -33,35 +32,34 @@ def main():
         env["domain_name"],
     )
 
-    attributes = ""
-    hostname = ""
+    device_attrs = ""
     # Get the active gateway for the source subnet
     for gw in nb.get_gateway_list(source):
         gw = json.loads(gw["payload"])
 
         # Skip if no device key
-        if hostname := gw.get("device"):
+        if device := gw.get("device"):
             # Strip firewall vsys from hostname
-            if re.match(r".*/.*", hostname):
-                hostname = hostname.split("/")[0]
+            if "/" in device:
+                device = device.split("/")[0]
 
-            attributes = nb.get_device_attributes(hostname)
+            device_attrs = nb.get_device_attrs(device)
         else:
             continue
 
         # Skip unknown routing devices
-        if attributes["vendor"] not in routing_devices:
-            attributes = ""
+        if device_attrs["vendor"] not in routing_devices:
+            device_attrs = ""
             continue
 
-        # Skip PAN passive HA member
-        if attributes["vendor"] == "Palo Alto Networks" and attributes["isHA"]:
-            if nb.get_pan_ha_state(attributes["name"]) == "passive":
+        # Skip PAN HA passive member
+        if device_attrs["vendor"] == "Palo Alto Networks" and device_attrs["isHA"]:
+            if nb.get_pan_ha_state(device_attrs["name"]) == "passive":
                 continue
 
         break
 
-    print(attributes)
+    print(device_attrs)
 
     t1_stop = time.process_time()
     print(f"\n Took {t1_stop-t1_start :.3f} seconds to complete")
