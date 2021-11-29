@@ -4,13 +4,17 @@ import argparse
 import json
 import logging
 import os
+import queue
 import time
+import threading
 from netbrain import NetBrain
 from netmiko import ConnectHandler
 
 logging.basicConfig(level=logging.WARNING)
 
 cwd = os.getcwd()
+results = dict()
+results_queue = queue.Queue()
 router_types = ["Cisco", "Palo Alto Networks"]
 
 
@@ -120,6 +124,30 @@ def analyze_path(mgmt_ip, src_ip, dst_ip, credentials, vendor):
     return output
 
 
+def worker(nb, src, dst, credentials, direction):
+    device_attrs = get_active_gateway(nb, src)
+    logging.info(json.dumps(device_attrs, indent=2, sort_keys=True))
+
+    results = analyze_path(
+        device_attrs["mgmtIP"],
+        device_attrs["srcIP"],
+        dst,
+        credentials,
+        device_attrs["vendor"],
+    )
+
+    results_queue.put({direction: results})
+
+
+def results_manager():
+    global results
+
+    while True:
+        result = results_queue.get()
+        results.update(result)
+        results_queue.task_done()
+
+
 def main():
     t1_start = time.time()
 
@@ -133,18 +161,29 @@ def main():
         env["domain_name"],
     )
 
-    for src, dst in [(args.source, args.destination), (args.destination, args.source)]:
-        device_attrs = get_active_gateway(nb, src)
-        logging.info(json.dumps(device_attrs, indent=2, sort_keys=True))
+    # Results manager
+    t = threading.Thread(target=results_manager)
+    t.daemon = True
+    t.start()
+    del t
 
-        results = analyze_path(
-            device_attrs["mgmtIP"],
-            device_attrs["srcIP"],
-            dst,
-            env["credentials"],
-            device_attrs["vendor"],
+    # Bidirectional path analysis
+    worker_threads = []
+    for src, dst in [(args.source, args.destination), (args.destination, args.source)]:
+        direction = "forward" if src == args.source else "reverse"
+        t = threading.Thread(
+            target=worker, args=(nb, src, dst, env["credentials"], direction)
         )
-        print("\n".join(results))
+        worker_threads.append(t)
+        t.start()
+
+    for t in worker_threads:
+        t.join()
+
+    results_queue.join()
+
+    print("\n".join(results["forward"]))
+    print("\n".join(results["reverse"]))
 
     t1_stop = time.time()
     print(f"\n Took {t1_stop-t1_start :.3f} seconds to complete")
