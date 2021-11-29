@@ -111,6 +111,7 @@ def analyze_path(mgmt_ip, src_ip, dst_ip, credentials, vendor):
                     cmd,
                     strip_prompt=True,
                     strip_command=True,
+                    delay_factor=2,
                     use_ttp=False,
                     ttp_template=vendors[vendor]["ttp_template"],
                 )
@@ -131,17 +132,19 @@ def main():
         env["tenant_name"],
         env["domain_name"],
     )
-    device_attrs = get_active_gateway(nb, args.source)
-    logging.info(json.dumps(device_attrs, indent=2, sort_keys=True))
 
-    results = analyze_path(
-        device_attrs["mgmtIP"],
-        device_attrs["srcIP"],
-        args.destination,
-        env["credentials"],
-        device_attrs["vendor"],
-    )
-    print("\n".join(results))
+    for src, dst in [(args.source, args.destination), (args.destination, args.source)]:
+        device_attrs = get_active_gateway(nb, src)
+        logging.info(json.dumps(device_attrs, indent=2, sort_keys=True))
+
+        results = analyze_path(
+            device_attrs["mgmtIP"],
+            device_attrs["srcIP"],
+            dst,
+            env["credentials"],
+            device_attrs["vendor"],
+        )
+        print("\n".join(results))
 
     t1_stop = time.time()
     print(f"\n Took {t1_stop-t1_start :.3f} seconds to complete")
