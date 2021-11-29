@@ -7,6 +7,8 @@ import os
 import queue
 import time
 import threading
+import signal
+import sys
 from netbrain import NetBrain
 from netmiko import ConnectHandler
 
@@ -16,6 +18,10 @@ cwd = os.getcwd()
 results = dict()
 results_queue = queue.Queue()
 router_types = ["Cisco", "Palo Alto Networks"]
+
+
+def sigint_handler(signum, frame):
+    sys.exit(1)
 
 
 def import_env(path):
@@ -150,6 +156,9 @@ def results_manager():
 
 def main():
     t1_start = time.time()
+
+    # Ctrl+C graceful exit
+    signal.signal(signal.SIGINT, sigint_handler)
 
     args = parse_args()
     env = import_env("env.json")
