@@ -2,10 +2,13 @@
 
 import argparse
 import json
+import logging
 import os
 import time
 from netbrain import NetBrain
 from netmiko import ConnectHandler
+
+logging.basicConfig(level=logging.WARNING)
 
 cwd = os.getcwd()
 router_types = ["Cisco", "Palo Alto Networks"]
@@ -129,7 +132,7 @@ def main():
         env["domain_name"],
     )
     device_attrs = get_active_gateway(nb, args.source)
-    # print(json.dumps(device_attrs, indent=2, sort_keys=True))
+    logging.info(json.dumps(device_attrs, indent=2, sort_keys=True))
 
     results = analyze_path(
         device_attrs["mgmtIP"],
