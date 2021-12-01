@@ -1,16 +1,24 @@
 #!/usr/bin/env python3
 
+# TODO: Parse ping output
+# TODO: Parse traceroute output
+# TODO: Insert hop zero (router source IP / client default gateway)
+# TODO: Stylize web frontend
+# TODO: Publish to server (configure NGINX, create certificate, register DNS)
+
 import argparse
 import json
 import logging
 import os
 import queue
-import time
-import threading
 import signal
 import sys
-from netbrain import NetBrain
+import threading
+import time
+
 from netmiko import ConnectHandler
+
+from netbrain import NetBrain
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -81,7 +89,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def analyze_path(mgmt_ip, src_ip, dst_ip, credentials, vendor):
+def analyze_path(mgmt_ip, gw_src, src, dst, credentials, vendor):
     """Analyze the path between the source and destination"""
 
     vendors = {
@@ -94,8 +102,9 @@ def analyze_path(mgmt_ip, src_ip, dst_ip, credentials, vendor):
             },
             "ttp_template": fr"{cwd}\cisco.ttp",
             "commands": [
-                f"ping {dst_ip} source {src_ip}",
-                f"traceroute {dst_ip} source {src_ip}",
+                f"ping {src} source {gw_src}",
+                f"ping {dst} source {gw_src}",
+                f"traceroute {dst} source {gw_src}",
             ],
         },
         "Palo Alto Networks": {
@@ -107,8 +116,9 @@ def analyze_path(mgmt_ip, src_ip, dst_ip, credentials, vendor):
             },
             "ttp_template": fr"{cwd}\pan.ttp",
             "commands": [
-                f"ping count 4 source {src_ip} host {dst_ip}",
-                f"traceroute source {src_ip} host {dst_ip}",
+                f"ping count 4 source {gw_src} host {src}",
+                f"ping count 4 source {gw_src} host {dst}",
+                f"traceroute source {gw_src} host {dst}",
             ],
         },
     }
@@ -131,15 +141,16 @@ def analyze_path(mgmt_ip, src_ip, dst_ip, credentials, vendor):
 
 
 def worker(nb, src, dst, credentials, direction):
-    device_attrs = get_active_gateway(nb, src)
-    logging.info(json.dumps(device_attrs, indent=2, sort_keys=True))
+    gw_attrs = get_active_gateway(nb, src)
+    logging.info(json.dumps(gw_attrs, indent=2, sort_keys=True))
 
     results = analyze_path(
-        device_attrs["mgmtIP"],
-        device_attrs["srcIP"],
+        gw_attrs["mgmtIP"],
+        gw_attrs["srcIP"],
+        src,
         dst,
         credentials,
-        device_attrs["vendor"],
+        gw_attrs["vendor"],
     )
 
     results_queue.put({direction: results})
