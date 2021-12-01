@@ -100,12 +100,11 @@ def analyze_path(mgmt_ip, gw_src, src, dst, credentials, vendor):
                 "username": credentials["Cisco"]["username"],
                 "password": credentials["Cisco"]["password"],
             },
-            "ttp_template": fr"{cwd}\cisco.ttp",
-            "commands": [
-                f"ping {src} source {gw_src}",
-                f"ping {dst} source {gw_src}",
-                f"traceroute {dst} source {gw_src}",
-            ],
+            "commands": {
+                "ping_src": f"ping {src} source {gw_src}",
+                "ping_dst": f"ping {dst} source {gw_src}",
+                "traceroute": f"traceroute {dst} source {gw_src}",
+            },
         },
         "Palo Alto Networks": {
             "ssh": {
@@ -114,28 +113,25 @@ def analyze_path(mgmt_ip, gw_src, src, dst, credentials, vendor):
                 "username": credentials["Palo Alto Networks"]["username"],
                 "password": credentials["Palo Alto Networks"]["password"],
             },
-            "ttp_template": fr"{cwd}\pan.ttp",
-            "commands": [
-                f"ping count 4 source {gw_src} host {src}",
-                f"ping count 4 source {gw_src} host {dst}",
-                f"traceroute source {gw_src} host {dst}",
-            ],
+            "commands": {
+                "ping_src": f"ping count 4 source {gw_src} host {src}",
+                "ping_dst": f"ping count 4 source {gw_src} host {dst}",
+                "traceroute": f"traceroute source {gw_src} host {dst}",
+            },
         },
     }
 
-    output = list()
+    output = dict()
     with ConnectHandler(**vendors[vendor]["ssh"]) as net_connect:
-        for cmd in vendors[vendor]["commands"]:
-            output.append(
-                net_connect.send_command_timing(
-                    cmd,
-                    strip_prompt=True,
-                    strip_command=True,
-                    delay_factor=2,
-                    use_ttp=False,
-                    ttp_template=vendors[vendor]["ttp_template"],
-                )
+        for k, cmd in vendors[vendor]["commands"].items():
+            results = net_connect.send_command_timing(
+                cmd,
+                strip_prompt=True,
+                strip_command=True,
+                delay_factor=2,
             )
+            # TODO: Parse results
+            output[k] = results
 
     return output
 
@@ -202,8 +198,7 @@ def main():
 
     results_queue.join()
 
-    print("\n".join(results["forward"]))
-    print("\n".join(results["reverse"]))
+    print(json.dumps(results, indent=2))
 
     t1_stop = time.time()
     print(f"\n Took {t1_stop-t1_start :.3f} seconds to complete")
